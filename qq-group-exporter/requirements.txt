@@ -1,0 +1,7 @@
+flask
+flask-cors
+openpyxl
+qrcode
+pillow
+aiohttp
+lagrange-python

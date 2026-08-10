@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QQ群成员导出工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+
+        .login-section {
+            text-align: center;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .status-badge.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-badge.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-export {
+            background: #28a745;
+            color: white;
+            padding: 8px 20px;
+            font-size: 0.9rem;
+        }
+
+        .btn-export:hover {
+            background: #218838;
+        }
+
+        .btn-export:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .groups-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .groups-section .group-count {
+            font-size: 0.9rem;
+            font-weight: normal;
+            color: #999;
+        }
+
+        .group-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .group-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .group-item:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+
+        .group-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            object-fit: cover;
+            margin-right: 15px;
+            background: #f0f0f0;
+            flex-shrink: 0;
+        }
+
+        .group-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .group-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .group-meta {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .group-meta span {
+            margin-right: 15px;
+        }
+
+        .group-owner {
+            display: flex;
+            align-items: center;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .owner-avatar {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            margin-right: 6px;
+            object-fit: cover;
+            background: #f0f0f0;
+        }
+
+        .owner-label {
+            color: #aaa;
+            margin-right: 4px;
+        }
+
+        .owner-nick {
+            color: #666;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f0f0f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .help-text {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+            text-align: left;
+        }
+
+        .help-text h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .help-text ol {
+            color: #666;
+            line-height: 1.8;
+            padding-left: 20px;
+        }
+
+        .help-text code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .pagination button {
+            padding: 6px 14px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: #666;
+            transition: all 0.2s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .pagination button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .pagination .page-info {
+            color: #999;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>QQ群成员导出工具</h1>
+        </header>
+
+        <div class="card login-section">
+            <div id="status-badge" class="status-badge pending">未连接</div>
+
+            <div class="login-content" id="login-form">
+                <button id="start-btn" class="btn btn-primary" onclick="refreshGroups()">刷新群列表</button>
+            </div>
+
+            <div id="loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p id="loading-text">正在获取群列表...</p>
+            </div>
+
+            <div class="help-text">
+                <h3>使用说明</h3>
+                <ol>
+                    <li>先启动 NapCatQQ 并登录 QQ</li>
+                    <li>确保 HTTP API 运行在 8081 端口</li>
+                    <li>点击"刷新群列表"获取群</li>
+                    <li>点击"导出名单"导出 Excel</li>
+                </ol>
+            </div>
+        </div>
+
+        <div id="groups-card" class="card groups-section" style="display: none;">
+            <h2>
+                群列表
+                <span class="group-count" id="group-count"></span>
+            </h2>
+            <div id="group-list" class="group-list"></div>
+            <div id="groups-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>正在获取群列表（群多时请耐心等待）...</p>
+            </div>
+            <div id="empty-state" class="empty-state" style="display: none;">
+                <p>没有找到群</p>
+            </div>
+            <div id="pagination" class="pagination" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let isLoggedIn = false;
+        let allGroups = [];
+        let currentPage = 1;
+        const PAGE_SIZE = 5;
+
+        async function checkStatus() {
+            try {
+                const resp = await fetch('/api/status');
+                const data = await resp.json();
+                updateStatus(data);
+                if (data.logged_in && !isLoggedIn) {
+                    isLoggedIn = true;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function updateStatus(data) {
+            const badge = document.getElementById('status-badge');
+            badge.textContent = data.login_status || '未连接';
+            badge.className = 'status-badge';
+            if (data.logged_in) {
+                badge.classList.add('success');
+            }
+        }
+
+        async function refreshGroups() {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            await showGroups();
+            loading.style.display = 'none';
+        }
+
+        async function showGroups() {
+            const groupsCard = document.getElementById('groups-card');
+            const groupList = document.getElementById('group-list');
+            const groupsLoading = document.getElementById('groups-loading');
+            const emptyState = document.getElementById('empty-state');
+
+            groupsCard.style.display = 'block';
+            groupList.innerHTML = '';
+            groupsLoading.style.display = 'block';
+            emptyState.style.display = 'none';
+            document.getElementById('pagination').style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/groups');
+                const data = await resp.json();
+
+                groupsLoading.style.display = 'none';
+
+                if (data.groups && data.groups.length > 0) {
+                    allGroups = data.groups;
+                    currentPage = 1;
+                    document.getElementById('group-count').textContent = `共 ${allGroups.length} 个群`;
+                    renderPage();
+                } else {
+                    emptyState.style.display = 'block';
+                }
+            } catch (e) {
+                groupsLoading.style.display = 'none';
+                console.error(e);
+                alert('获取群列表失败，请确认 NapCatQQ 正在运行并已登录 QQ');
+            }
+        }
+
+        function renderPage() {
+            const groupList = document.getElementById('group-list');
+            groupList.innerHTML = '';
+
+            const start = (currentPage - 1) * PAGE_SIZE;
+            const end = start + PAGE_SIZE;
+            const pageGroups = allGroups.slice(start, end);
+
+            pageGroups.forEach(group => {
+                const item = document.createElement('div');
+                item.className = 'group-item';
+
+                const ownerAvatar = group.owner_avatar || '';
+                const ownerNick = group.owner_nickname || '未知';
+
+                item.innerHTML = `
+                    <img class="group-avatar" src="${group.avatar_url}" alt="${escapeHtml(group.group_name)}" onerror="this.style.display='none'">
+                    <div class="group-info">
+                        <div class="group-name">${escapeHtml(group.group_name)}</div>
+                        <div class="group-meta">
+                            <span>群号: ${group.group_id}</span>
+                            <span>成员: ${group.member_count}${group.max_member_count ? '/' + group.max_member_count : ''}</span>
+                        </div>
+                        <div class="group-owner">
+                            <span class="owner-label">群主:</span>
+                            ${ownerAvatar ? `<img class="owner-avatar" src="${ownerAvatar}" onerror="this.style.display='none'">` : ''}
+                            <span class="owner-nick">${escapeHtml(ownerNick)}</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-export" onclick="exportGroup(${group.group_id}, '${escapeHtml(group.group_name)}')" data-group-id="${group.group_id}">
+                        导出名单
+                    </button>
+                `;
+                groupList.appendChild(item);
+            });
+
+            renderPagination();
+        }
+
+        function renderPagination() {
+            const pagination = document.getElementById('pagination');
+            const totalPages = Math.ceil(allGroups.length / PAGE_SIZE);
+
+            if (totalPages <= 1) {
+                pagination.style.display = 'none';
+                return;
+            }
+
+            pagination.style.display = 'flex';
+            let html = '';
+
+            html += `<button onclick="goPage(1)" ${currentPage === 1 ? 'disabled' : ''}>首页</button>`;
+            html += `<button onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一页</button>`;
+
+            const maxButtons = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+            if (endPage - startPage + 1 < maxButtons) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="${i === currentPage ? 'active' : ''}" onclick="goPage(${i})">${i}</button>`;
+            }
+
+            html += `<button onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一页</button>`;
+            html += `<button onclick="goPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>末页</button>`;
+            html += `<span class="page-info">第 ${currentPage} / ${totalPages} 页</span>`;
+
+            pagination.innerHTML = html;
+        }
+
+        function goPage(page) {
+            const totalPages = Math.ceil(allGroups.length / PAGE_SIZE);
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            renderPage();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function exportGroup(groupID, groupName) {
+            const btn = document.querySelector(`button[data-group-id="${groupID}"]`);
+            const originalText = btn.textContent;
+
+            btn.disabled = true;
+            btn.textContent = '导出中...';
+
+            try {
+                const resp = await fetch(`/api/export/${groupID}`, { method: 'POST' });
+
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${groupName}-${groupID}-${new Date().toISOString().slice(0,10)}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    btn.textContent = '导出成功';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }, 2000);
+                } else {
+                    let errorMsg = '未知错误';
+                    try {
+                        const data = await resp.json();
+                        errorMsg = data.error || errorMsg;
+                    } catch {}
+                    alert('导出失败: ' + errorMsg);
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                alert('导出失败: ' + e.message);
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        setInterval(checkStatus, 2000);
+        checkStatus();
+    </script>
+</body>
+</html>

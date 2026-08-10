@@ -1,0 +1,25 @@
+# 编译输出
+qq-group-exporter
+qq-group-exporter.exe
+*.exe
+*.dll
+
+# 数据目录
+cqdata/
+exports/
+
+# Go
+vendor/
+go.sum
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 临时文件
+*.tmp
+*.log
+.DS_Store
