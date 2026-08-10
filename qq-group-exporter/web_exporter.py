@@ -264,7 +264,7 @@ def get_managed_groups():
     return managed, None
 
 
-def export_stats_to_excel(main_group_id, main_group_name, sao_users, water_group_ids,
+def export_stats_to_excel(main_group_id, main_group_name, scanner_users, water_group_ids,
                           start_date_str, end_date_str):
     """
     参团率统计导出Excel
@@ -297,48 +297,62 @@ def export_stats_to_excel(main_group_id, main_group_name, sao_users, water_group
     if error:
         return None, f"获取群列表失败: {error}"
 
-    sao_group_map = {}
-    for sao in sao_users:
-        sao_id = sao["user_id"]
-        sao_groups = []
+    scanner_group_map = {}
+    for scanner in scanner_users:
+        scanner_id = scanner["user_id"]
+        scanner_groups = []
         for g in all_groups_list:
             if g["group_id"] in water_set:
                 continue
             ct = g.get("create_time") or 0
             if ct < start_ts or ct > end_ts:
                 continue
-            if g.get("owner_id") == sao_id:
-                sao_groups.append(g)
-        sao_group_map[sao_id] = sao_groups
+            if g.get("owner_id") == scanner_id:
+                scanner_groups.append(g)
+        scanner_group_map[scanner_id] = scanner_groups
 
     # 3. 对每位扫者的每个群，拉成员并统计主群成员出现次数
-    stats = {uid: {sao["user_id"]: 0 for sao in sao_users} for uid in user_map}
+    stats = {uid: {scanner["user_id"]: 0 for scanner in scanner_users} for uid in user_map}
 
-    for sao in sao_users:
-        sao_id = sao["user_id"]
-        for g in sao_group_map[sao_id]:
+    for scanner in scanner_users:
+        scanner_id = scanner["user_id"]
+        for g in scanner_group_map[scanner_id]:
             members, err = get_group_members(g["group_id"])
             if err:
                 continue
             for m in members:
                 uid = m.get("user_id")
                 if uid in stats:
-                    stats[uid][sao_id] += 1
+                    stats[uid][scanner_id] += 1
 
     # 4. 汇总排序
     rows = []
-    for uid, sao_counts in stats.items():
-        total = sum(sao_counts.values())
+    for uid, scanner_counts in stats.items():
+        total = sum(scanner_counts.values())
         rows.append({
             "user_id": uid,
             "nickname": user_map[uid].get("nickname", ""),
             "total": total,
-            "sao_counts": sao_counts,
+            "scanner_counts": scanner_counts,
         })
 
     rows.sort(key=lambda r: r["total"], reverse=True)
 
-    # 5. 写入Excel
+    # 5. 收集团书群列表（按建群日期正序），用于右侧对照表
+    scanner_groups_list = []
+    for scanner in scanner_users:
+        scanner_id = scanner["user_id"]
+        scanner_name = scanner.get("nickname") or str(scanner_id)
+        for g in scanner_group_map.get(scanner_id, []):
+            scanner_groups_list.append({
+                "scanner_name": scanner_name,
+                "group_name": g.get("group_name", ""),
+                "member_count": g.get("member_count", 0),
+                "create_time": g.get("create_time") or 0,
+            })
+    scanner_groups_list.sort(key=lambda x: x["create_time"])
+
+    # 6. 写入Excel
     wb = openpyxl.Workbook()
     ws = wb.active
     wb.remove(ws)
@@ -358,12 +372,22 @@ def export_stats_to_excel(main_group_id, main_group_name, sao_users, water_group
     center_alignment = Alignment(horizontal="center", vertical="center")
 
     headers = ["QQ号", "昵称", "总参团次数"]
-    for sao in sao_users:
-        display = sao.get("remark") or sao.get("nickname") or str(sao["user_id"])
+    for scanner in scanner_users:
+        display = scanner.get("remark") or scanner.get("nickname") or str(scanner["user_id"])
         headers.append(display)
 
+    scanner_col_start = len(headers) + 2  # 空1列
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_num, value=header)
+        cell.font = header_font
+        cell.alignment = header_alignment
+        cell.fill = header_fill
+        cell.border = thin_border
+
+    # 右侧扫者群对照表表头
+    right_headers = ["扫者ID", "团书群", "人数", "建群日期"]
+    for i, h in enumerate(right_headers):
+        cell = ws.cell(row=1, column=scanner_col_start + i, value=h)
         cell.font = header_font
         cell.alignment = header_alignment
         cell.fill = header_fill
@@ -374,8 +398,8 @@ def export_stats_to_excel(main_group_id, main_group_name, sao_users, water_group
         ws.cell(row=row_num, column=2, value=row_data["nickname"])
         ws.cell(row=row_num, column=3, value=row_data["total"])
 
-        for col_idx, sao in enumerate(sao_users, 4):
-            ws.cell(row=row_num, column=col_idx, value=row_data["sao_counts"][sao["user_id"]])
+        for col_idx, scanner in enumerate(scanner_users, 4):
+            ws.cell(row=row_num, column=col_idx, value=row_data["scanner_counts"][scanner["user_id"]])
 
         for col_num in range(1, len(headers) + 1):
             cell = ws.cell(row=row_num, column=col_num)
@@ -386,12 +410,38 @@ def export_stats_to_excel(main_group_id, main_group_name, sao_users, water_group
             else:
                 cell.alignment = data_alignment
 
+    # 右侧扫者群对照表数据
+    for i, sg in enumerate(scanner_groups_list):
+        r = 2 + i
+        ws.cell(row=r, column=scanner_col_start, value=sg["scanner_name"])
+        ws.cell(row=r, column=scanner_col_start + 1, value=sg["group_name"])
+        ws.cell(row=r, column=scanner_col_start + 2, value=sg["member_count"])
+        if sg["create_time"]:
+            ws.cell(row=r, column=scanner_col_start + 3,
+                    value=datetime.fromtimestamp(sg["create_time"]).strftime("%Y-%m-%d"))
+        for j in range(4):
+            cell = ws.cell(row=r, column=scanner_col_start + j)
+            cell.font = data_font
+            cell.border = thin_border
+            if j in (2, 3):
+                cell.alignment = center_alignment
+            else:
+                cell.alignment = data_alignment
+
     ws.column_dimensions['A'].width = 14
     ws.column_dimensions['B'].width = 18
     ws.column_dimensions['C'].width = 12
-    for i in range(len(sao_users)):
+    for i in range(len(scanner_users)):
         col_letter = openpyxl.utils.get_column_letter(4 + i)
         ws.column_dimensions[col_letter].width = 14
+
+    # 空列宽度 + 右侧四列宽度
+    blank_col = openpyxl.utils.get_column_letter(scanner_col_start - 1)
+    ws.column_dimensions[blank_col].width = 3
+    ws.column_dimensions[openpyxl.utils.get_column_letter(scanner_col_start)].width = 14
+    ws.column_dimensions[openpyxl.utils.get_column_letter(scanner_col_start + 1)].width = 20
+    ws.column_dimensions[openpyxl.utils.get_column_letter(scanner_col_start + 2)].width = 8
+    ws.column_dimensions[openpyxl.utils.get_column_letter(scanner_col_start + 3)].width = 14
 
     ws.freeze_panes = "A2"
 
@@ -434,17 +484,26 @@ def stats_export():
 
     data = request.get_json(force=True)
     main_group_id = data.get("main_group_id")
-    sao_user_ids = data.get("sao_user_ids", [])
+    scanner_users_raw = data.get("scanner_users", [])
     water_group_ids = data.get("water_group_ids", [])
     start_date = data.get("start_date")
     end_date = data.get("end_date")
 
     if not main_group_id:
         return jsonify({"error": "请选择主群"}), 400
-    if not sao_user_ids:
+    if not scanner_users_raw:
         return jsonify({"error": "请至少选择一位扫者"}), 400
     if not start_date or not end_date:
         return jsonify({"error": "请选择时间范围"}), 400
+
+    # 按 user_id 去重
+    seen = set()
+    scanner_users = []
+    for u in scanner_users_raw:
+        uid = u.get("user_id")
+        if uid and uid not in seen:
+            seen.add(uid)
+            scanner_users.append(u)
 
     # 获取主群信息
     groups, error = get_groups()
@@ -457,17 +516,8 @@ def stats_export():
             main_group_name = g.get("group_name", "主群")
             break
 
-    # 获取扫者信息
-    friends, error = get_friends()
-    if error:
-        return jsonify({"error": f"获取好友列表失败: {error}"}), 500
-
-    sao_users = [f for f in friends if f.get("user_id") in sao_user_ids]
-    if not sao_users:
-        return jsonify({"error": "未找到所选扫者的信息"}), 400
-
     filename, error = export_stats_to_excel(
-        main_group_id, main_group_name, sao_users, water_group_ids,
+        main_group_id, main_group_name, scanner_users, water_group_ids,
         start_date, end_date
     )
     if error:

@@ -136,7 +136,7 @@
 
         .bottom-section {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
             gap: 20px;
         }
 
@@ -492,15 +492,27 @@
                 </div>
             </div>
 
-            <!-- 扫者选择 -->
+            <!-- 扫者选择（好友） -->
             <div class="panel">
                 <h2>扫者选择 <span class="hint">（从好友中选择群主）</span></h2>
                 <div class="search-box">
-                    <input type="text" id="sao-search" placeholder="输入昵称搜索好友..." oninput="searchFriends()" onfocus="searchFriends()">
-                    <div id="sao-dropdown" class="dropdown"></div>
+                    <input type="text" id="friend-scanner-search" placeholder="输入昵称搜索好友..." oninput="searchFriendScanners()" onfocus="searchFriendScanners()">
+                    <div id="friend-scanner-dropdown" class="dropdown"></div>
                 </div>
-                <div id="sao-selected" class="selected-list">
+                <div id="friend-scanner-selected" class="selected-list">
                     <div class="selected-empty">已选择的扫者将显示在这里</div>
+                </div>
+            </div>
+
+            <!-- 扫者选择（团书群） -->
+            <div class="panel">
+                <h2>扫者选择 <span class="hint">（从团书群选择群主）</span></h2>
+                <div class="search-box">
+                    <input type="text" id="group-scanner-search" placeholder="输入群名搜索..." oninput="searchGroupScanners()" onfocus="searchGroupScanners()">
+                    <div id="group-scanner-dropdown" class="dropdown"></div>
+                </div>
+                <div id="group-scanner-selected" class="selected-list">
+                    <div class="selected-empty">选择群后，该群群主将作为扫者</div>
                 </div>
             </div>
         </div>
@@ -512,7 +524,8 @@
         let allFriends = [];
         let selectedMainGroup = null;
         let waterGroups = [];
-        let saoUsers = [];
+        let friendScanners = [];
+        let groupScanners = [];
         let isLoggedIn = false;
 
         // 初始化日期
@@ -699,20 +712,23 @@
 
         // 搜索好友（扫者）
         let friendSearchTimer = null;
-        function searchFriends() {
+        function searchFriendScanners() {
             clearTimeout(friendSearchTimer);
             friendSearchTimer = setTimeout(() => {
-                const keyword = document.getElementById('sao-search').value.trim().toLowerCase();
-                const dropdown = document.getElementById('sao-dropdown');
+                const keyword = document.getElementById('friend-scanner-search').value.trim().toLowerCase();
+                const dropdown = document.getElementById('friend-scanner-dropdown');
 
                 if (!keyword) {
                     dropdown.classList.remove('active');
                     return;
                 }
 
-                const saoIds = new Set(saoUsers.map(u => u.user_id));
+                const existingIds = new Set([
+                    ...friendScanners.map(u => u.user_id),
+                    ...groupScanners.map(u => u.user_id)
+                ]);
                 const filtered = allFriends.filter(f =>
-                    !saoIds.has(f.user_id) &&
+                    !existingIds.has(f.user_id) &&
                     (f.nickname.toLowerCase().includes(keyword) ||
                      f.remark?.toLowerCase().includes(keyword) ||
                      String(f.user_id).includes(keyword))
@@ -727,7 +743,7 @@
                             ? `${f.nickname} (${f.remark})`
                             : f.nickname;
                         return `
-                            <div class="dropdown-item" onclick="addSaoUser(${f.user_id})">
+                            <div class="dropdown-item" onclick="addFriendScanner(${f.user_id})">
                                 <img class="dropdown-avatar" src="${avatar}" onerror="this.style.display='none'">
                                 <div class="dropdown-info">
                                     <div class="dropdown-name">${escapeHtml(displayName)}</div>
@@ -741,26 +757,30 @@
             }, 200);
         }
 
-        // 添加扫者
-        function addSaoUser(userId) {
+        // 添加好友扫者
+        function addFriendScanner(userId) {
             const friend = allFriends.find(f => f.user_id === userId);
             if (!friend) return;
-            if (saoUsers.find(u => u.user_id === userId)) return;
-            saoUsers.push(friend);
-            document.getElementById('sao-search').value = '';
-            document.getElementById('sao-dropdown').classList.remove('active');
-            renderSaoSelected();
+            const existingIds = new Set([
+                ...friendScanners.map(u => u.user_id),
+                ...groupScanners.map(u => u.user_id)
+            ]);
+            if (existingIds.has(userId)) return;
+            friendScanners.push(friend);
+            document.getElementById('friend-scanner-search').value = '';
+            document.getElementById('friend-scanner-dropdown').classList.remove('active');
+            renderFriendScannersSelected();
             updateExportButton();
         }
 
-        // 渲染已选扫者
-        function renderSaoSelected() {
-            const container = document.getElementById('sao-selected');
-            if (saoUsers.length === 0) {
+        // 渲染已选好友扫者
+        function renderFriendScannersSelected() {
+            const container = document.getElementById('friend-scanner-selected');
+            if (friendScanners.length === 0) {
                 container.innerHTML = '<div class="selected-empty">已选择的扫者将显示在这里</div>';
                 return;
             }
-            container.innerHTML = saoUsers.map(u => {
+            container.innerHTML = friendScanners.map(u => {
                 const avatar = `https://q1.qlogo.cn/g?b=qq&nk=${u.user_id}&s=100`;
                 const displayName = u.remark && u.remark !== u.nickname
                     ? `${u.nickname} (${u.remark})`
@@ -772,29 +792,137 @@
                             <div class="name">${escapeHtml(displayName)}</div>
                             <div class="sub">QQ: ${u.user_id}</div>
                         </div>
-                        <button class="remove-btn" onclick="removeSaoUser(${u.user_id})">×</button>
+                        <button class="remove-btn" onclick="removeFriendScanner(${u.user_id})">×</button>
                     </div>
                 `;
             }).join('');
         }
 
-        // 移除扫者
-        function removeSaoUser(userId) {
-            saoUsers = saoUsers.filter(u => u.user_id !== userId);
-            renderSaoSelected();
+        // 移除好友扫者
+        function removeFriendScanner(userId) {
+            friendScanners = friendScanners.filter(u => u.user_id !== userId);
+            renderFriendScannersSelected();
             updateExportButton();
+        }
+
+        // 搜索群（团书群扫者）
+        let groupScannerSearchTimer = null;
+        function searchGroupScanners() {
+            clearTimeout(groupScannerSearchTimer);
+            groupScannerSearchTimer = setTimeout(() => {
+                const keyword = document.getElementById('group-scanner-search').value.trim().toLowerCase();
+                const dropdown = document.getElementById('group-scanner-dropdown');
+
+                if (!keyword) {
+                    dropdown.classList.remove('active');
+                    return;
+                }
+
+                const existingIds = new Set([
+                    ...friendScanners.map(u => u.user_id),
+                    ...groupScanners.map(u => u.user_id)
+                ]);
+                const filtered = allGroups.filter(g =>
+                    g.group_name.toLowerCase().includes(keyword) &&
+                    g.owner_id && !existingIds.has(g.owner_id)
+                ).slice(0, 20);
+
+                if (filtered.length === 0) {
+                    dropdown.innerHTML = '<div class="selected-empty">无匹配结果</div>';
+                } else {
+                    dropdown.innerHTML = filtered.map(g => {
+                        return `
+                            <div class="dropdown-item" onclick="addGroupScanner(${g.group_id})">
+                                <img class="dropdown-avatar" src="${g.avatar_url}" onerror="this.style.display='none'">
+                                <div class="dropdown-info">
+                                    <div class="dropdown-name">${escapeHtml(g.group_name)}</div>
+                                    <div class="dropdown-sub">群主: ${escapeHtml(g.owner_nickname || '未知')} (${g.owner_id})</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+                dropdown.classList.add('active');
+            }, 200);
+        }
+
+        // 添加团书群扫者
+        function addGroupScanner(groupId) {
+            const group = allGroups.find(g => g.group_id === groupId);
+            if (!group || !group.owner_id) return;
+            const existingIds = new Set([
+                ...friendScanners.map(u => u.user_id),
+                ...groupScanners.map(u => u.user_id)
+            ]);
+            if (existingIds.has(group.owner_id)) return;
+
+            groupScanners.push({
+                user_id: group.owner_id,
+                nickname: group.owner_nickname || String(group.owner_id),
+                remark: '',
+                from_group_id: group.group_id,
+                from_group_name: group.group_name
+            });
+            document.getElementById('group-scanner-search').value = '';
+            document.getElementById('group-scanner-dropdown').classList.remove('active');
+            renderGroupScannersSelected();
+            updateExportButton();
+        }
+
+        // 渲染团书群已选扫者
+        function renderGroupScannersSelected() {
+            const container = document.getElementById('group-scanner-selected');
+            if (groupScanners.length === 0) {
+                container.innerHTML = '<div class="selected-empty">选择群后，该群群主将作为扫者</div>';
+                return;
+            }
+            container.innerHTML = groupScanners.map(u => {
+                const avatar = `https://q1.qlogo.cn/g?b=qq&nk=${u.user_id}&s=100`;
+                return `
+                    <div class="selected-item">
+                        <img class="avatar" src="${avatar}" onerror="this.style.display='none'">
+                        <div class="info">
+                            <div class="name">${escapeHtml(u.nickname)}</div>
+                            <div class="sub">来自: ${escapeHtml(u.from_group_name)}</div>
+                        </div>
+                        <button class="remove-btn" onclick="removeGroupScanner(${u.user_id})">×</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 移除团书群扫者
+        function removeGroupScanner(userId) {
+            groupScanners = groupScanners.filter(u => u.user_id !== userId);
+            renderGroupScannersSelected();
+            updateExportButton();
+        }
+
+        // 获取所有扫者（合并去重）
+        function getAllScanners() {
+            const seen = new Set();
+            const result = [];
+            for (const u of [...friendScanners, ...groupScanners]) {
+                if (!seen.has(u.user_id)) {
+                    seen.add(u.user_id);
+                    result.push(u);
+                }
+            }
+            return result;
         }
 
         // 更新导出按钮状态
         function updateExportButton() {
             const btn = document.getElementById('export-btn');
-            const canExport = selectedMainGroup && saoUsers.length > 0;
+            const allScanners = getAllScanners();
+            const canExport = selectedMainGroup && allScanners.length > 0;
             btn.disabled = !canExport;
         }
 
         // 导出
         async function doExport() {
-            if (!selectedMainGroup || saoUsers.length === 0) return;
+            const allScanners = getAllScanners();
+            if (!selectedMainGroup || allScanners.length === 0) return;
 
             const btn = document.getElementById('export-btn');
             const originalText = btn.textContent;
@@ -810,7 +938,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         main_group_id: selectedMainGroup.group_id,
-                        sao_user_ids: saoUsers.map(u => u.user_id),
+                        scanner_users: allScanners,
                         water_group_ids: waterGroups.map(g => g.group_id),
                         start_date: startDate,
                         end_date: endDate
