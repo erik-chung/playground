@@ -6,10 +6,10 @@ QQ群成员导出工具 - Web版
 """
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 
-from flask import Flask, jsonify, send_file
+from flask import Flask, jsonify, send_file, request
 from flask_cors import CORS
 
 try:
@@ -177,6 +177,11 @@ def index():
     return send_file("templates/index.html")
 
 
+@app.route("/stats")
+def stats_page():
+    return send_file("templates/stats.html")
+
+
 @app.route("/api/status")
 def get_status():
     logged_in = check_login()
@@ -222,6 +227,253 @@ def export_group_api(group_id):
         return jsonify({"error": error}), 500
 
     return send_file(filename, as_attachment=True)
+
+
+def get_friends():
+    """获取好友列表"""
+    data, error = call_onebot_api("get_friend_list")
+    if error:
+        return [], error
+    return data, None
+
+
+def get_managed_groups():
+    """获取当前登录用户为群主或管理员的群，按创建时间从旧到新排序"""
+    groups, error = get_groups()
+    if error:
+        return [], error
+
+    login_info, err = call_onebot_api("get_login_info")
+    if err or not login_info:
+        return [], err or "无法获取登录信息"
+
+    self_id = login_info.get("user_id")
+
+    managed = []
+    for g in groups:
+        gid = g["group_id"]
+        members, err = get_group_members(gid)
+        if err:
+            continue
+        for m in members:
+            if m.get("user_id") == self_id and m.get("role") in ("owner", "admin"):
+                managed.append(g)
+                break
+
+    managed.sort(key=lambda g: g.get("create_time") or 0)
+    return managed, None
+
+
+def export_stats_to_excel(main_group_id, main_group_name, sao_users, water_group_ids,
+                          start_date_str, end_date_str):
+    """
+    参团率统计导出Excel
+    主群提供用户池（排除群主/管理员）
+    每个扫者一列，统计主群成员在该扫者为群主的群中的出现次数
+    时间范围：群创建时间在 [start_date, end_date] 内
+    排除水群
+    """
+    if not OPENPYXL_AVAILABLE:
+        return None, "openpyxl 未安装，请运行：pip install openpyxl"
+
+    start_ts = int(datetime.strptime(start_date_str, "%Y-%m-%d").timestamp())
+    end_ts = int(datetime.strptime(end_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S").timestamp())
+
+    water_set = set(water_group_ids)
+
+    # 1. 获取主群成员列表（排除群主和管理员）
+    main_members, error = get_group_members(main_group_id)
+    if error:
+        return None, f"获取主群成员失败: {error}"
+
+    user_pool = [m for m in main_members if m.get("role") == "member"]
+    if not user_pool:
+        return None, "主群中没有普通成员（已排除群主和管理员）"
+
+    user_map = {m["user_id"]: m for m in user_pool}
+
+    # 2. 获取所有群列表，找出每位扫者为群主的群（在时间范围内，非水群）
+    all_groups_list, error = get_groups()
+    if error:
+        return None, f"获取群列表失败: {error}"
+
+    sao_group_map = {}
+    for sao in sao_users:
+        sao_id = sao["user_id"]
+        sao_groups = []
+        for g in all_groups_list:
+            if g["group_id"] in water_set:
+                continue
+            ct = g.get("create_time") or 0
+            if ct < start_ts or ct > end_ts:
+                continue
+            if g.get("owner_id") == sao_id:
+                sao_groups.append(g)
+        sao_group_map[sao_id] = sao_groups
+
+    # 3. 对每位扫者的每个群，拉成员并统计主群成员出现次数
+    stats = {uid: {sao["user_id"]: 0 for sao in sao_users} for uid in user_map}
+
+    for sao in sao_users:
+        sao_id = sao["user_id"]
+        for g in sao_group_map[sao_id]:
+            members, err = get_group_members(g["group_id"])
+            if err:
+                continue
+            for m in members:
+                uid = m.get("user_id")
+                if uid in stats:
+                    stats[uid][sao_id] += 1
+
+    # 4. 汇总排序
+    rows = []
+    for uid, sao_counts in stats.items():
+        total = sum(sao_counts.values())
+        rows.append({
+            "user_id": uid,
+            "nickname": user_map[uid].get("nickname", ""),
+            "total": total,
+            "sao_counts": sao_counts,
+        })
+
+    rows.sort(key=lambda r: r["total"], reverse=True)
+
+    # 5. 写入Excel
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    wb.remove(ws)
+    ws = wb.create_sheet("参团率统计")
+
+    header_font = Font(name="微软雅黑", size=11, bold=True)
+    header_fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+    thin_border = Border(
+        left=Side(style="thin", color="000000"),
+        right=Side(style="thin", color="000000"),
+        top=Side(style="thin", color="000000"),
+        bottom=Side(style="thin", color="000000"),
+    )
+    data_font = Font(name="微软雅黑", size=10)
+    data_alignment = Alignment(horizontal="left", vertical="center")
+    center_alignment = Alignment(horizontal="center", vertical="center")
+
+    headers = ["QQ号", "昵称", "总参团次数"]
+    for sao in sao_users:
+        display = sao.get("remark") or sao.get("nickname") or str(sao["user_id"])
+        headers.append(display)
+
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num, value=header)
+        cell.font = header_font
+        cell.alignment = header_alignment
+        cell.fill = header_fill
+        cell.border = thin_border
+
+    for row_num, row_data in enumerate(rows, 2):
+        ws.cell(row=row_num, column=1, value=str(row_data["user_id"]))
+        ws.cell(row=row_num, column=2, value=row_data["nickname"])
+        ws.cell(row=row_num, column=3, value=row_data["total"])
+
+        for col_idx, sao in enumerate(sao_users, 4):
+            ws.cell(row=row_num, column=col_idx, value=row_data["sao_counts"][sao["user_id"]])
+
+        for col_num in range(1, len(headers) + 1):
+            cell = ws.cell(row=row_num, column=col_num)
+            cell.font = data_font
+            cell.border = thin_border
+            if col_num >= 3:
+                cell.alignment = center_alignment
+            else:
+                cell.alignment = data_alignment
+
+    ws.column_dimensions['A'].width = 14
+    ws.column_dimensions['B'].width = 18
+    ws.column_dimensions['C'].width = 12
+    for i in range(len(sao_users)):
+        col_letter = openpyxl.utils.get_column_letter(4 + i)
+        ws.column_dimensions[col_letter].width = 14
+
+    ws.freeze_panes = "A2"
+
+    def _fmt_date(s):
+        d = datetime.strptime(s, "%Y-%m-%d")
+        return f"{d.year}.{d.month}.{d.day}"
+    start_fmt = _fmt_date(start_date_str)
+    end_fmt = _fmt_date(end_date_str)
+    safe_name = "".join(c for c in main_group_name if c not in r'\/:*?"<>|')
+    filename = EXPORT_DIR / f"参团率统计（{start_fmt}-{end_fmt}）-{safe_name}.xlsx"
+
+    wb.save(filename)
+    return filename, None
+
+
+@app.route("/api/stats/managed-groups")
+def stats_managed_groups():
+    if not check_login():
+        return jsonify({"error": "未连接到 OneBot API"}), 401
+    groups, error = get_managed_groups()
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify({"managed_groups": groups, "total": len(groups)})
+
+
+@app.route("/api/stats/friends")
+def stats_friends():
+    if not check_login():
+        return jsonify({"error": "未连接到 OneBot API"}), 401
+    friends, error = get_friends()
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify({"friends": friends, "total": len(friends)})
+
+
+@app.route("/api/stats/export", methods=["POST"])
+def stats_export():
+    if not check_login():
+        return jsonify({"error": "未连接到 OneBot API"}), 401
+
+    data = request.get_json(force=True)
+    main_group_id = data.get("main_group_id")
+    sao_user_ids = data.get("sao_user_ids", [])
+    water_group_ids = data.get("water_group_ids", [])
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
+
+    if not main_group_id:
+        return jsonify({"error": "请选择主群"}), 400
+    if not sao_user_ids:
+        return jsonify({"error": "请至少选择一位扫者"}), 400
+    if not start_date or not end_date:
+        return jsonify({"error": "请选择时间范围"}), 400
+
+    # 获取主群信息
+    groups, error = get_groups()
+    if error:
+        return jsonify({"error": error}), 500
+
+    main_group_name = "主群"
+    for g in groups:
+        if g.get("group_id") == main_group_id:
+            main_group_name = g.get("group_name", "主群")
+            break
+
+    # 获取扫者信息
+    friends, error = get_friends()
+    if error:
+        return jsonify({"error": f"获取好友列表失败: {error}"}), 500
+
+    sao_users = [f for f in friends if f.get("user_id") in sao_user_ids]
+    if not sao_users:
+        return jsonify({"error": "未找到所选扫者的信息"}), 400
+
+    filename, error = export_stats_to_excel(
+        main_group_id, main_group_name, sao_users, water_group_ids,
+        start_date, end_date
+    )
+    if error:
+        return jsonify({"error": error}), 500
+
+    return send_file(filename, as_attachment=True, download_name=filename.name)
 
 
 def main():

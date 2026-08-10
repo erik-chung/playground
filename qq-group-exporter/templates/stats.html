@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>参团率统计 - QQ群成员导出工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .back-link {
+            color: white;
+            text-decoration: none;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+
+        .top-section {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .date-range {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .date-range label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .date-range input[type="date"] {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+
+        .date-range .sep {
+            color: #999;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        .btn-success:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-export-wrap {
+            margin-left: auto;
+        }
+
+        .bottom-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 20px;
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel h2 {
+            font-size: 1.15rem;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .panel h2 .hint {
+            font-size: 0.8rem;
+            font-weight: normal;
+            color: #999;
+            margin-left: 8px;
+        }
+
+        .search-box {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: #667eea;
+        }
+
+        .dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .dropdown.active {
+            display: block;
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+            gap: 10px;
+        }
+
+        .dropdown-item:hover {
+            background: #f5f7ff;
+        }
+
+        .dropdown-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            object-fit: cover;
+            background: #f0f0f0;
+            flex-shrink: 0;
+        }
+
+        .dropdown-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .dropdown-name {
+            font-size: 0.9rem;
+            color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dropdown-sub {
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+        .selected-list {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px dashed #e0e0e0;
+            border-radius: 10px;
+            padding: 10px;
+            min-height: 120px;
+        }
+
+        .selected-empty {
+            color: #bbb;
+            text-align: center;
+            padding: 30px 10px;
+            font-size: 0.9rem;
+        }
+
+        .selected-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            background: #f8f9ff;
+            gap: 10px;
+        }
+
+        .selected-item .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            object-fit: cover;
+            background: #f0f0f0;
+            flex-shrink: 0;
+        }
+
+        .selected-item .info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .selected-item .name {
+            font-size: 0.9rem;
+            color: #333;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .selected-item .sub {
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+        .selected-item .remove-btn {
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: #ff6b6b;
+            color: white;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .selected-item .remove-btn:hover {
+            background: #ee5a5a;
+        }
+
+        .main-group-list {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 8px;
+            max-height: 520px;
+        }
+
+        .main-group-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .main-group-list::-webkit-scrollbar-track {
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .main-group-list::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+
+        .main-group-list::-webkit-scrollbar-thumb:hover {
+            background: #aaa;
+        }
+
+        .main-group-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+
+        .main-group-item:hover {
+            background: #f5f7ff;
+        }
+
+        .main-group-item.selected {
+            background: #e8edff;
+            border: 1px solid #667eea;
+        }
+
+        .main-group-item .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: #f0f0f0;
+            flex-shrink: 0;
+        }
+
+        .main-group-item .info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .main-group-item .name {
+            font-size: 0.95rem;
+            color: #333;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .main-group-item .sub {
+            font-size: 0.8rem;
+            color: #999;
+        }
+
+        .loading-small {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            font-size: 0.9rem;
+        }
+
+        .spinner-inline {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f0f0f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        .status-badge.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>参团率统计</h1>
+            <a href="/" class="back-link">← 返回首页</a>
+        </header>
+
+        <!-- 上方区域 -->
+        <div class="card">
+            <div class="top-section">
+                <div class="date-range">
+                    <label>时间跨度：</label>
+                    <input type="date" id="start-date">
+                    <span class="sep">至</span>
+                    <input type="date" id="end-date">
+                </div>
+                <div class="status-bar">
+                    <span id="status-badge" class="status-badge pending">未连接</span>
+                    <span id="status-text" style="color:#999; font-size:0.85rem;"></span>
+                </div>
+                <div class="btn-export-wrap">
+                    <button id="export-btn" class="btn btn-success" onclick="doExport()" disabled>导出名单</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 下方三栏 -->
+        <div class="bottom-section">
+            <!-- 主群选择 -->
+            <div class="panel">
+                <h2>主群选择 <span class="hint">（你是群主/管理员的群）</span></h2>
+                <div id="main-group-loading" class="loading-small">
+                    <span class="spinner-inline"></span>加载中...
+                </div>
+                <div id="main-group-list" class="main-group-list" style="display: none;"></div>
+            </div>
+
+            <!-- 水群排除 -->
+            <div class="panel">
+                <h2>水群排除 <span class="hint">（不参与统计的群）</span></h2>
+                <div class="search-box">
+                    <input type="text" id="water-search" placeholder="输入群名搜索..." oninput="searchWaterGroups()" onfocus="searchWaterGroups()">
+                    <div id="water-dropdown" class="dropdown"></div>
+                </div>
+                <div id="water-selected" class="selected-list">
+                    <div class="selected-empty">已排除的水群将显示在这里</div>
+                </div>
+            </div>
+
+            <!-- 扫者选择 -->
+            <div class="panel">
+                <h2>扫者选择 <span class="hint">（从好友中选择群主）</span></h2>
+                <div class="search-box">
+                    <input type="text" id="sao-search" placeholder="输入昵称搜索好友..." oninput="searchFriends()" onfocus="searchFriends()">
+                    <div id="sao-dropdown" class="dropdown"></div>
+                </div>
+                <div id="sao-selected" class="selected-list">
+                    <div class="selected-empty">已选择的扫者将显示在这里</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allManagedGroups = [];
+        let allGroups = [];
+        let allFriends = [];
+        let selectedMainGroup = null;
+        let waterGroups = [];
+        let saoUsers = [];
+        let isLoggedIn = false;
+
+        // 初始化日期
+        function initDates() {
+            const today = new Date();
+            document.getElementById('end-date').value = today.toISOString().slice(0, 10);
+            const oneYearAgo = new Date(today);
+            oneYearAgo.setFullYear(today.getFullYear() - 1);
+            document.getElementById('start-date').value = oneYearAgo.toISOString().slice(0, 10);
+        }
+
+        // 状态检查
+        async function checkStatus() {
+            try {
+                const resp = await fetch('/api/status');
+                const data = await resp.json();
+                const badge = document.getElementById('status-badge');
+                badge.textContent = data.login_status || '未连接';
+                badge.className = 'status-badge';
+                if (data.logged_in) {
+                    badge.classList.add('success');
+                    if (!isLoggedIn) {
+                        isLoggedIn = true;
+                        loadData();
+                    }
+                } else {
+                    badge.classList.add('pending');
+                    isLoggedIn = false;
+                }
+            } catch (e) {
+                document.getElementById('status-badge').textContent = '连接失败';
+                document.getElementById('status-badge').className = 'status-badge pending';
+            }
+        }
+
+        // 加载数据
+        async function loadData() {
+            document.getElementById('status-text').textContent = '正在加载数据...';
+            try {
+                const [managedResp, groupsResp, friendsResp] = await Promise.all([
+                    fetch('/api/stats/managed-groups'),
+                    fetch('/api/groups'),
+                    fetch('/api/stats/friends')
+                ]);
+
+                const managedData = await managedResp.json();
+                const groupsData = await groupsResp.json();
+                const friendsData = await friendsResp.json();
+
+                if (managedData.managed_groups) {
+                    allManagedGroups = managedData.managed_groups;
+                    renderMainGroups();
+                }
+                if (groupsData.groups) {
+                    allGroups = groupsData.groups;
+                }
+                if (friendsData.friends) {
+                    allFriends = friendsData.friends;
+                }
+                document.getElementById('status-text').textContent =
+                    `已加载 ${allManagedGroups.length} 个管理群 / ${allGroups.length} 个群 / ${allFriends.length} 位好友`;
+            } catch (e) {
+                document.getElementById('status-text').textContent = '数据加载失败';
+                console.error(e);
+            }
+        }
+
+        // 渲染主群列表
+        function renderMainGroups() {
+            const loading = document.getElementById('main-group-loading');
+            const list = document.getElementById('main-group-list');
+            loading.style.display = 'none';
+            list.style.display = 'block';
+            list.innerHTML = '';
+
+            if (allManagedGroups.length === 0) {
+                list.innerHTML = '<div class="selected-empty">暂无你是群主/管理员的群</div>';
+                return;
+            }
+
+            allManagedGroups.forEach(group => {
+                const item = document.createElement('div');
+                item.className = 'main-group-item';
+                item.dataset.groupId = group.group_id;
+                item.onclick = () => selectMainGroup(group);
+
+                const createTime = group.create_time
+                    ? new Date(group.create_time * 1000).toLocaleDateString()
+                    : '未知';
+
+                item.innerHTML = `
+                    <img class="avatar" src="${group.avatar_url}" onerror="this.style.display='none'">
+                    <div class="info">
+                        <div class="name">${escapeHtml(group.group_name)}</div>
+                        <div class="sub">${group.member_count}人 · 创建于 ${createTime}</div>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        // 选择主群
+        function selectMainGroup(group) {
+            selectedMainGroup = group;
+            document.querySelectorAll('.main-group-item').forEach(el => {
+                el.classList.toggle('selected', parseInt(el.dataset.groupId) === group.group_id);
+            });
+            updateExportButton();
+        }
+
+        // 搜索水群
+        let waterSearchTimer = null;
+        function searchWaterGroups() {
+            clearTimeout(waterSearchTimer);
+            waterSearchTimer = setTimeout(() => {
+                const keyword = document.getElementById('water-search').value.trim().toLowerCase();
+                const dropdown = document.getElementById('water-dropdown');
+
+                if (!keyword) {
+                    dropdown.classList.remove('active');
+                    return;
+                }
+
+                const waterIds = new Set(waterGroups.map(g => g.group_id));
+                const filtered = allGroups.filter(g =>
+                    !waterIds.has(g.group_id) &&
+                    g.group_name.toLowerCase().includes(keyword)
+                ).slice(0, 20);
+
+                if (filtered.length === 0) {
+                    dropdown.innerHTML = '<div class="selected-empty">无匹配结果</div>';
+                } else {
+                    dropdown.innerHTML = filtered.map(g => `
+                        <div class="dropdown-item" onclick="addWaterGroup(${g.group_id})">
+                            <img class="dropdown-avatar" src="${g.avatar_url}" onerror="this.style.display='none'">
+                            <div class="dropdown-info">
+                                <div class="dropdown-name">${escapeHtml(g.group_name)}</div>
+                                <div class="dropdown-sub">${g.member_count}人</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                dropdown.classList.add('active');
+            }, 200);
+        }
+
+        // 添加水群
+        function addWaterGroup(groupId) {
+            const group = allGroups.find(g => g.group_id === groupId);
+            if (!group) return;
+            if (waterGroups.find(g => g.group_id === groupId)) return;
+            waterGroups.push(group);
+            document.getElementById('water-search').value = '';
+            document.getElementById('water-dropdown').classList.remove('active');
+            renderWaterSelected();
+            updateExportButton();
+        }
+
+        // 渲染已选水群
+        function renderWaterSelected() {
+            const container = document.getElementById('water-selected');
+            if (waterGroups.length === 0) {
+                container.innerHTML = '<div class="selected-empty">已排除的水群将显示在这里</div>';
+                return;
+            }
+            container.innerHTML = waterGroups.map(g => `
+                <div class="selected-item">
+                    <img class="avatar" src="${g.avatar_url}" onerror="this.style.display='none'">
+                    <div class="info">
+                        <div class="name">${escapeHtml(g.group_name)}</div>
+                        <div class="sub">${g.member_count}人</div>
+                    </div>
+                    <button class="remove-btn" onclick="removeWaterGroup(${g.group_id})">×</button>
+                </div>
+            `).join('');
+        }
+
+        // 移除水群
+        function removeWaterGroup(groupId) {
+            waterGroups = waterGroups.filter(g => g.group_id !== groupId);
+            renderWaterSelected();
+            updateExportButton();
+        }
+
+        // 搜索好友（扫者）
+        let friendSearchTimer = null;
+        function searchFriends() {
+            clearTimeout(friendSearchTimer);
+            friendSearchTimer = setTimeout(() => {
+                const keyword = document.getElementById('sao-search').value.trim().toLowerCase();
+                const dropdown = document.getElementById('sao-dropdown');
+
+                if (!keyword) {
+                    dropdown.classList.remove('active');
+                    return;
+                }
+
+                const saoIds = new Set(saoUsers.map(u => u.user_id));
+                const filtered = allFriends.filter(f =>
+                    !saoIds.has(f.user_id) &&
+                    (f.nickname.toLowerCase().includes(keyword) ||
+                     f.remark?.toLowerCase().includes(keyword) ||
+                     String(f.user_id).includes(keyword))
+                ).slice(0, 20);
+
+                if (filtered.length === 0) {
+                    dropdown.innerHTML = '<div class="selected-empty">无匹配结果</div>';
+                } else {
+                    dropdown.innerHTML = filtered.map(f => {
+                        const avatar = `https://q1.qlogo.cn/g?b=qq&nk=${f.user_id}&s=100`;
+                        const displayName = f.remark && f.remark !== f.nickname
+                            ? `${f.nickname} (${f.remark})`
+                            : f.nickname;
+                        return `
+                            <div class="dropdown-item" onclick="addSaoUser(${f.user_id})">
+                                <img class="dropdown-avatar" src="${avatar}" onerror="this.style.display='none'">
+                                <div class="dropdown-info">
+                                    <div class="dropdown-name">${escapeHtml(displayName)}</div>
+                                    <div class="dropdown-sub">QQ: ${f.user_id}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+                dropdown.classList.add('active');
+            }, 200);
+        }
+
+        // 添加扫者
+        function addSaoUser(userId) {
+            const friend = allFriends.find(f => f.user_id === userId);
+            if (!friend) return;
+            if (saoUsers.find(u => u.user_id === userId)) return;
+            saoUsers.push(friend);
+            document.getElementById('sao-search').value = '';
+            document.getElementById('sao-dropdown').classList.remove('active');
+            renderSaoSelected();
+            updateExportButton();
+        }
+
+        // 渲染已选扫者
+        function renderSaoSelected() {
+            const container = document.getElementById('sao-selected');
+            if (saoUsers.length === 0) {
+                container.innerHTML = '<div class="selected-empty">已选择的扫者将显示在这里</div>';
+                return;
+            }
+            container.innerHTML = saoUsers.map(u => {
+                const avatar = `https://q1.qlogo.cn/g?b=qq&nk=${u.user_id}&s=100`;
+                const displayName = u.remark && u.remark !== u.nickname
+                    ? `${u.nickname} (${u.remark})`
+                    : u.nickname;
+                return `
+                    <div class="selected-item">
+                        <img class="avatar" src="${avatar}" onerror="this.style.display='none'">
+                        <div class="info">
+                            <div class="name">${escapeHtml(displayName)}</div>
+                            <div class="sub">QQ: ${u.user_id}</div>
+                        </div>
+                        <button class="remove-btn" onclick="removeSaoUser(${u.user_id})">×</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 移除扫者
+        function removeSaoUser(userId) {
+            saoUsers = saoUsers.filter(u => u.user_id !== userId);
+            renderSaoSelected();
+            updateExportButton();
+        }
+
+        // 更新导出按钮状态
+        function updateExportButton() {
+            const btn = document.getElementById('export-btn');
+            const canExport = selectedMainGroup && saoUsers.length > 0;
+            btn.disabled = !canExport;
+        }
+
+        // 导出
+        async function doExport() {
+            if (!selectedMainGroup || saoUsers.length === 0) return;
+
+            const btn = document.getElementById('export-btn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '导出中...';
+
+            try {
+                const startDate = document.getElementById('start-date').value;
+                const endDate = document.getElementById('end-date').value;
+
+                const resp = await fetch('/api/stats/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        main_group_id: selectedMainGroup.group_id,
+                        sao_user_ids: saoUsers.map(u => u.user_id),
+                        water_group_ids: waterGroups.map(g => g.group_id),
+                        start_date: startDate,
+                        end_date: endDate
+                    })
+                });
+
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+
+                    // 优先从 Content-Disposition 的 filename* (RFC 5987) 解析，支持中文
+                    let filename = null;
+                    const disp = resp.headers.get('Content-Disposition');
+                    if (disp) {
+                        const m = disp.match(/filename\*=UTF-8''([^;]+)/i);
+                        if (m) filename = decodeURIComponent(m[1]);
+                    }
+                    if (!filename) {
+                        const fmt = (d) => `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`;
+                        const s = fmt(new Date(startDate));
+                        const e = fmt(new Date(endDate));
+                        filename = `参团率统计（${s}-${e}）-${selectedMainGroup.group_name}.xlsx`;
+                    }
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    btn.textContent = '导出成功';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }, 2000);
+                } else {
+                    let errorMsg = '未知错误';
+                    try {
+                        const data = await resp.json();
+                        errorMsg = data.error || errorMsg;
+                    } catch {}
+                    alert('导出失败: ' + errorMsg);
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                alert('导出失败: ' + e.message);
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 点击外部关闭下拉框
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-box')) {
+                document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('active'));
+            }
+        });
+
+        initDates();
+        checkStatus();
+        setInterval(checkStatus, 5000);
+    </script>
+</body>
+</html>

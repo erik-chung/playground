@@ -309,6 +309,7 @@
 
             <div class="login-content" id="login-form">
                 <button id="start-btn" class="btn btn-primary" onclick="refreshGroups()">刷新群列表</button>
+                <button class="btn btn-primary" style="margin-left: 10px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);" onclick="goStats()">参团率统计</button>
             </div>
 
             <div id="loading" class="loading" style="display: none;">
@@ -532,6 +533,10 @@
                 btn.textContent = originalText;
                 btn.disabled = false;
             }
+        }
+
+        function goStats() {
+            window.location.href = '/stats';
         }
 
         function escapeHtml(text) {
