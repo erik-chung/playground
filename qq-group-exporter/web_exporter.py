@@ -265,7 +265,8 @@ def get_managed_groups():
 
 
 def export_stats_to_excel(main_group_id, main_group_name, scanner_users, water_group_ids,
-                          optional_group_ids, start_date_str, end_date_str):
+                          black_group_ids, staff_user_ids, optional_group_ids,
+                          start_date_str, end_date_str):
     """
     参团率统计导出Excel
     主群提供用户池（排除群主/管理员）
@@ -273,6 +274,8 @@ def export_stats_to_excel(main_group_id, main_group_name, scanner_users, water_g
     时间范围：扫者群的创建时间在 [start_date, end_date] 内
     主群和自选群不受时间范围限制，强制参与统计
     排除水群
+    排除黑群：黑群的所有成员从用户池中移除
+    排除工作人员：工作人员从用户池中移除
     """
     if not OPENPYXL_AVAILABLE:
         return None, "openpyxl 未安装，请运行：pip install openpyxl"
@@ -281,6 +284,7 @@ def export_stats_to_excel(main_group_id, main_group_name, scanner_users, water_g
     end_ts = int(datetime.strptime(end_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S").timestamp())
 
     water_set = set(water_group_ids)
+    black_set = set(black_group_ids or [])
     optional_set = set(optional_group_ids or [])
 
     # 1. 获取主群成员列表（排除群主和管理员）
@@ -291,6 +295,26 @@ def export_stats_to_excel(main_group_id, main_group_name, scanner_users, water_g
     user_pool = [m for m in main_members if m.get("role") == "member"]
     if not user_pool:
         return None, "主群中没有普通成员（已排除群主和管理员）"
+
+    # 1.1 排除黑群中的所有成员
+    if black_set:
+        black_member_ids = set()
+        for bgid in black_set:
+            bg_members, err = get_group_members(bgid)
+            if err:
+                continue
+            for m in bg_members:
+                black_member_ids.add(m.get("user_id"))
+        user_pool = [m for m in user_pool if m["user_id"] not in black_member_ids]
+        if not user_pool:
+            return None, "排除黑群后没有剩余成员"
+
+    # 1.2 排除工作人员
+    if staff_user_ids:
+        staff_set = set(staff_user_ids)
+        user_pool = [m for m in user_pool if m["user_id"] not in staff_set]
+        if not user_pool:
+            return None, "排除工作人员后没有剩余成员"
 
     user_map = {m["user_id"]: m for m in user_pool}
 
@@ -504,6 +528,8 @@ def stats_export():
     main_group_id = data.get("main_group_id")
     scanner_users_raw = data.get("scanner_users", [])
     water_group_ids = data.get("water_group_ids", [])
+    black_group_ids = data.get("black_group_ids", [])
+    staff_user_ids = data.get("staff_user_ids", [])
     optional_group_ids = data.get("optional_group_ids", [])
     start_date = data.get("start_date")
     end_date = data.get("end_date")
@@ -537,7 +563,7 @@ def stats_export():
 
     filename, error = export_stats_to_excel(
         main_group_id, main_group_name, scanner_users, water_group_ids,
-        optional_group_ids, start_date, end_date
+        black_group_ids, staff_user_ids, optional_group_ids, start_date, end_date
     )
     if error:
         return jsonify({"error": error}), 500

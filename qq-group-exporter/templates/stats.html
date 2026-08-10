@@ -50,14 +50,14 @@
             background: white;
             border-radius: 16px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 25px;
-            margin-bottom: 20px;
+            padding: 12px 20px;
+            margin-bottom: 16px;
         }
 
         .top-section {
             display: flex;
             align-items: center;
-            gap: 30px;
+            gap: 20px;
             flex-wrap: wrap;
         }
 
@@ -137,16 +137,20 @@
         .bottom-section {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            gap: 20px;
-            height: calc(100vh - 280px);
+            gap: 16px;
+            height: calc(100vh - 200px);
             min-height: 500px;
         }
 
         .panel-column {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 16px;
             min-height: 0;
+        }
+
+        .panel-column-3 {
+            gap: 12px;
         }
 
         .panel {
@@ -484,13 +488,25 @@
 
         <!-- 下方三列 -->
         <div class="bottom-section">
-            <!-- 列1：主群选择 -->
-            <div class="panel">
-                <h2>主群选择 <span class="hint">（你是群主/管理员的群）</span></h2>
-                <div id="main-group-loading" class="loading-small">
-                    <span class="spinner-inline"></span>加载中...
+            <!-- 列1：主群选择 + 区域7 -->
+            <div class="panel-column">
+                <div class="panel">
+                    <h2>主群选择 <span class="hint">（你是群主/管理员的群）</span></h2>
+                    <div id="main-group-loading" class="loading-small">
+                        <span class="spinner-inline"></span>加载中...
+                    </div>
+                    <div id="main-group-list" class="main-group-list" style="display: none;"></div>
                 </div>
-                <div id="main-group-list" class="main-group-list" style="display: none;"></div>
+                <div class="panel">
+                    <h2>黑群选择 <span class="hint">（排除这些群的全部成员）</span></h2>
+                    <div class="search-box">
+                        <input type="text" id="black-search" placeholder="输入群名搜索..." oninput="searchBlackGroups()" onfocus="searchBlackGroups()">
+                        <div id="black-dropdown" class="dropdown"></div>
+                    </div>
+                    <div id="black-selected" class="selected-list">
+                        <div class="selected-empty">已选择的黑群将显示在这里</div>
+                    </div>
+                </div>
             </div>
 
             <!-- 列2：水群排除 + 自选群 -->
@@ -517,8 +533,8 @@
                 </div>
             </div>
 
-            <!-- 列3：扫者选择（好友） + 扫者选择（团书群） -->
-            <div class="panel-column">
+            <!-- 列3：扫者选择（好友） + 扫者选择（团书群） + 区域7 -->
+            <div class="panel-column panel-column-3">
                 <div class="panel">
                     <h2>扫者选择 <span class="hint">（从好友中选择群主）</span></h2>
                     <div class="search-box">
@@ -539,6 +555,16 @@
                         <div class="selected-empty">选择群后，该群群主将作为扫者</div>
                     </div>
                 </div>
+                <div class="panel">
+                    <h2>工作人员 <span class="hint">（从统计名单中排除）</span></h2>
+                    <div class="search-box">
+                        <input type="text" id="staff-search" placeholder="输入昵称搜索好友..." oninput="searchStaff()" onfocus="searchStaff()">
+                        <div id="staff-dropdown" class="dropdown"></div>
+                    </div>
+                    <div id="staff-selected" class="selected-list">
+                        <div class="selected-empty">已选择的工作人员将显示在这里</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -549,9 +575,11 @@
         let allFriends = [];
         let selectedMainGroup = null;
         let waterGroups = [];
+        let blackGroups = [];
         let optionalGroups = [];
         let friendScanners = [];
         let groupScanners = [];
+        let staffUsers = [];
         let isLoggedIn = false;
 
         // 初始化日期
@@ -734,6 +762,78 @@
             waterGroups = waterGroups.filter(g => g.group_id !== groupId);
             renderWaterSelected();
             updateExportButton();
+        }
+
+        // 搜索黑群
+        let blackSearchTimer = null;
+        function searchBlackGroups() {
+            clearTimeout(blackSearchTimer);
+            blackSearchTimer = setTimeout(() => {
+                const keyword = document.getElementById('black-search').value.trim().toLowerCase();
+                const dropdown = document.getElementById('black-dropdown');
+
+                if (!keyword) {
+                    dropdown.classList.remove('active');
+                    return;
+                }
+
+                const blackIds = new Set(blackGroups.map(g => g.group_id));
+                const filtered = allGroups.filter(g =>
+                    !blackIds.has(g.group_id) &&
+                    g.group_name.toLowerCase().includes(keyword)
+                ).slice(0, 20);
+
+                if (filtered.length === 0) {
+                    dropdown.innerHTML = '<div class="selected-empty">无匹配结果</div>';
+                } else {
+                    dropdown.innerHTML = filtered.map(g => `
+                        <div class="dropdown-item" onclick="addBlackGroup(${g.group_id})">
+                            <img class="dropdown-avatar" src="${g.avatar_url}" onerror="this.style.display='none'">
+                            <div class="dropdown-info">
+                                <div class="dropdown-name">${escapeHtml(g.group_name)}</div>
+                                <div class="dropdown-sub">${g.member_count}人</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                dropdown.classList.add('active');
+            }, 200);
+        }
+
+        // 添加黑群
+        function addBlackGroup(groupId) {
+            const group = allGroups.find(g => g.group_id === groupId);
+            if (!group) return;
+            if (blackGroups.find(g => g.group_id === groupId)) return;
+            blackGroups.push(group);
+            document.getElementById('black-search').value = '';
+            document.getElementById('black-dropdown').classList.remove('active');
+            renderBlackSelected();
+        }
+
+        // 渲染已选黑群
+        function renderBlackSelected() {
+            const container = document.getElementById('black-selected');
+            if (blackGroups.length === 0) {
+                container.innerHTML = '<div class="selected-empty">已选择的黑群将显示在这里</div>';
+                return;
+            }
+            container.innerHTML = blackGroups.map(g => `
+                <div class="selected-item">
+                    <img class="avatar" src="${g.avatar_url}" onerror="this.style.display='none'">
+                    <div class="info">
+                        <div class="name">${escapeHtml(g.group_name)}</div>
+                        <div class="sub">${g.member_count}人</div>
+                    </div>
+                    <button class="remove-btn" onclick="removeBlackGroup(${g.group_id})">×</button>
+                </div>
+            `).join('');
+        }
+
+        // 移除黑群
+        function removeBlackGroup(groupId) {
+            blackGroups = blackGroups.filter(g => g.group_id !== groupId);
+            renderBlackSelected();
         }
 
         // 搜索自选群
@@ -1000,6 +1100,86 @@
             updateExportButton();
         }
 
+        // 搜索工作人员（好友）
+        let staffSearchTimer = null;
+        function searchStaff() {
+            clearTimeout(staffSearchTimer);
+            staffSearchTimer = setTimeout(() => {
+                const keyword = document.getElementById('staff-search').value.trim().toLowerCase();
+                const dropdown = document.getElementById('staff-dropdown');
+
+                if (!keyword) {
+                    dropdown.classList.remove('active');
+                    return;
+                }
+
+                const staffIds = new Set(staffUsers.map(u => u.user_id));
+                const filtered = allFriends.filter(f =>
+                    !staffIds.has(f.user_id) &&
+                    (f.nickname.toLowerCase().includes(keyword) ||
+                     f.remark?.toLowerCase().includes(keyword) ||
+                     String(f.user_id).includes(keyword))
+                ).slice(0, 20);
+
+                if (filtered.length === 0) {
+                    dropdown.innerHTML = '<div class="selected-empty">无匹配结果</div>';
+                } else {
+                    dropdown.innerHTML = filtered.map(f => {
+                        const avatar = `https://q1.qlogo.cn/g?b=qq&nk=${f.user_id}&s=100`;
+                        return `
+                            <div class="dropdown-item" onclick="addStaff(${f.user_id})">
+                                <img class="dropdown-avatar" src="${avatar}" onerror="this.style.display='none'">
+                                <div class="dropdown-info">
+                                    <div class="dropdown-name">${escapeHtml(f.nickname)}</div>
+                                    <div class="dropdown-sub">QQ: ${f.user_id}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+                dropdown.classList.add('active');
+            }, 200);
+        }
+
+        // 添加工作人员
+        function addStaff(userId) {
+            const friend = allFriends.find(f => f.user_id === userId);
+            if (!friend) return;
+            if (staffUsers.find(u => u.user_id === userId)) return;
+            staffUsers.push(friend);
+            document.getElementById('staff-search').value = '';
+            document.getElementById('staff-dropdown').classList.remove('active');
+            renderStaffSelected();
+        }
+
+        // 渲染已选工作人员
+        function renderStaffSelected() {
+            const container = document.getElementById('staff-selected');
+            if (staffUsers.length === 0) {
+                container.innerHTML = '<div class="selected-empty">已选择的工作人员将显示在这里</div>';
+                return;
+            }
+            container.innerHTML = staffUsers.map(u => {
+                const avatar = `https://q1.qlogo.cn/g?b=qq&nk=${u.user_id}&s=100`;
+                return `
+                    <div class="selected-item">
+                        <img class="avatar" src="${avatar}" onerror="this.style.display='none'">
+                        <div class="info">
+                            <div class="name">${escapeHtml(u.nickname)}</div>
+                            <div class="sub">QQ: ${u.user_id}</div>
+                        </div>
+                        <button class="remove-btn" onclick="removeStaff(${u.user_id})">×</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 移除工作人员
+        function removeStaff(userId) {
+            staffUsers = staffUsers.filter(u => u.user_id !== userId);
+            renderStaffSelected();
+        }
+
         // 获取所有扫者（好友扫者 + 团书群扫者 + 主群群主 + 自选群群主，合并去重）
         function getAllScanners() {
             const seen = new Set();
@@ -1066,6 +1246,8 @@
                         main_group_id: selectedMainGroup.group_id,
                         scanner_users: allScanners,
                         water_group_ids: waterGroups.map(g => g.group_id),
+                        black_group_ids: blackGroups.map(g => g.group_id),
+                        staff_user_ids: staffUsers.map(u => u.user_id),
                         optional_group_ids: optionalGroups.map(g => g.group_id),
                         start_date: startDate,
                         end_date: endDate
