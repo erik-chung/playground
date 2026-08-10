@@ -265,12 +265,13 @@ def get_managed_groups():
 
 
 def export_stats_to_excel(main_group_id, main_group_name, scanner_users, water_group_ids,
-                          start_date_str, end_date_str):
+                          optional_group_ids, start_date_str, end_date_str):
     """
     参团率统计导出Excel
     主群提供用户池（排除群主/管理员）
     每个扫者一列，统计主群成员在该扫者为群主的群中的出现次数
-    时间范围：群创建时间在 [start_date, end_date] 内
+    时间范围：扫者群的创建时间在 [start_date, end_date] 内
+    主群和自选群不受时间范围限制，强制参与统计
     排除水群
     """
     if not OPENPYXL_AVAILABLE:
@@ -280,6 +281,7 @@ def export_stats_to_excel(main_group_id, main_group_name, scanner_users, water_g
     end_ts = int(datetime.strptime(end_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S").timestamp())
 
     water_set = set(water_group_ids)
+    optional_set = set(optional_group_ids or [])
 
     # 1. 获取主群成员列表（排除群主和管理员）
     main_members, error = get_group_members(main_group_id)
@@ -292,10 +294,12 @@ def export_stats_to_excel(main_group_id, main_group_name, scanner_users, water_g
 
     user_map = {m["user_id"]: m for m in user_pool}
 
-    # 2. 获取所有群列表，找出每位扫者为群主的群（在时间范围内，非水群）
+    # 2. 获取所有群列表，找出每位扫者为群主的群
     all_groups_list, error = get_groups()
     if error:
         return None, f"获取群列表失败: {error}"
+
+    group_map = {g["group_id"]: g for g in all_groups_list}
 
     scanner_group_map = {}
     for scanner in scanner_users:
@@ -310,6 +314,20 @@ def export_stats_to_excel(main_group_id, main_group_name, scanner_users, water_g
             if g.get("owner_id") == scanner_id:
                 scanner_groups.append(g)
         scanner_group_map[scanner_id] = scanner_groups
+
+    # 2.1 主群和自选群强制加入对应扫者的群列表（不受时间范围限制，排除水群）
+    forced_group_ids = {main_group_id} | optional_set
+    for gid in forced_group_ids:
+        if gid in water_set:
+            continue
+        g = group_map.get(gid)
+        if not g:
+            continue
+        owner_id = g.get("owner_id")
+        if not owner_id or owner_id not in scanner_group_map:
+            continue
+        if not any(sg["group_id"] == gid for sg in scanner_group_map[owner_id]):
+            scanner_group_map[owner_id].append(g)
 
     # 3. 对每位扫者的每个群，拉成员并统计主群成员出现次数
     stats = {uid: {scanner["user_id"]: 0 for scanner in scanner_users} for uid in user_map}
@@ -486,6 +504,7 @@ def stats_export():
     main_group_id = data.get("main_group_id")
     scanner_users_raw = data.get("scanner_users", [])
     water_group_ids = data.get("water_group_ids", [])
+    optional_group_ids = data.get("optional_group_ids", [])
     start_date = data.get("start_date")
     end_date = data.get("end_date")
 
@@ -518,7 +537,7 @@ def stats_export():
 
     filename, error = export_stats_to_excel(
         main_group_id, main_group_name, scanner_users, water_group_ids,
-        start_date, end_date
+        optional_group_ids, start_date, end_date
     )
     if error:
         return jsonify({"error": error}), 500

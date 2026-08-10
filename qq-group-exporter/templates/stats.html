@@ -136,38 +136,51 @@
 
         .bottom-section {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: 20px;
+            height: calc(100vh - 280px);
+            min-height: 500px;
+        }
+
+        .panel-column {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-height: 0;
         }
 
         .panel {
             background: white;
             border-radius: 16px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 20px;
-            min-height: 500px;
+            padding: 16px;
+            min-height: 0;
             display: flex;
             flex-direction: column;
+            flex: 1;
+            overflow: hidden;
         }
 
         .panel h2 {
-            font-size: 1.15rem;
+            font-size: 1rem;
             color: #333;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
             border-bottom: 2px solid #f0f0f0;
+            flex-shrink: 0;
         }
 
         .panel h2 .hint {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             font-weight: normal;
             color: #999;
-            margin-left: 8px;
+            margin-left: 6px;
         }
 
         .search-box {
             position: relative;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
+            flex-shrink: 0;
         }
 
         .search-box input {
@@ -250,7 +263,7 @@
             border: 1px dashed #e0e0e0;
             border-radius: 10px;
             padding: 10px;
-            min-height: 120px;
+            min-height: 0;
         }
 
         .selected-empty {
@@ -324,7 +337,7 @@
             border: 1px solid #e0e0e0;
             border-radius: 10px;
             padding: 8px;
-            max-height: 520px;
+            min-height: 0;
         }
 
         .main-group-list::-webkit-scrollbar {
@@ -469,9 +482,9 @@
             </div>
         </div>
 
-        <!-- 下方三栏 -->
+        <!-- 下方三列 -->
         <div class="bottom-section">
-            <!-- 主群选择 -->
+            <!-- 列1：主群选择 -->
             <div class="panel">
                 <h2>主群选择 <span class="hint">（你是群主/管理员的群）</span></h2>
                 <div id="main-group-loading" class="loading-small">
@@ -480,39 +493,51 @@
                 <div id="main-group-list" class="main-group-list" style="display: none;"></div>
             </div>
 
-            <!-- 水群排除 -->
-            <div class="panel">
-                <h2>水群排除 <span class="hint">（不参与统计的群）</span></h2>
-                <div class="search-box">
-                    <input type="text" id="water-search" placeholder="输入群名搜索..." oninput="searchWaterGroups()" onfocus="searchWaterGroups()">
-                    <div id="water-dropdown" class="dropdown"></div>
+            <!-- 列2：水群排除 + 自选群 -->
+            <div class="panel-column">
+                <div class="panel">
+                    <h2>水群排除 <span class="hint">（不参与统计的群）</span></h2>
+                    <div class="search-box">
+                        <input type="text" id="water-search" placeholder="输入群名搜索..." oninput="searchWaterGroups()" onfocus="searchWaterGroups()">
+                        <div id="water-dropdown" class="dropdown"></div>
+                    </div>
+                    <div id="water-selected" class="selected-list">
+                        <div class="selected-empty">已排除的水群将显示在这里</div>
+                    </div>
                 </div>
-                <div id="water-selected" class="selected-list">
-                    <div class="selected-empty">已排除的水群将显示在这里</div>
+                <div class="panel">
+                    <h2>自选群 <span class="hint">（参与统计的群）</span></h2>
+                    <div class="search-box">
+                        <input type="text" id="optional-search" placeholder="输入群名搜索..." oninput="searchOptionalGroups()" onfocus="searchOptionalGroups()">
+                        <div id="optional-dropdown" class="dropdown"></div>
+                    </div>
+                    <div id="optional-selected" class="selected-list">
+                        <div class="selected-empty">已选择的自选群将显示在这里</div>
+                    </div>
                 </div>
             </div>
 
-            <!-- 扫者选择（好友） -->
-            <div class="panel">
-                <h2>扫者选择 <span class="hint">（从好友中选择群主）</span></h2>
-                <div class="search-box">
-                    <input type="text" id="friend-scanner-search" placeholder="输入昵称搜索好友..." oninput="searchFriendScanners()" onfocus="searchFriendScanners()">
-                    <div id="friend-scanner-dropdown" class="dropdown"></div>
+            <!-- 列3：扫者选择（好友） + 扫者选择（团书群） -->
+            <div class="panel-column">
+                <div class="panel">
+                    <h2>扫者选择 <span class="hint">（从好友中选择群主）</span></h2>
+                    <div class="search-box">
+                        <input type="text" id="friend-scanner-search" placeholder="输入昵称搜索好友..." oninput="searchFriendScanners()" onfocus="searchFriendScanners()">
+                        <div id="friend-scanner-dropdown" class="dropdown"></div>
+                    </div>
+                    <div id="friend-scanner-selected" class="selected-list">
+                        <div class="selected-empty">已选择的扫者将显示在这里</div>
+                    </div>
                 </div>
-                <div id="friend-scanner-selected" class="selected-list">
-                    <div class="selected-empty">已选择的扫者将显示在这里</div>
-                </div>
-            </div>
-
-            <!-- 扫者选择（团书群） -->
-            <div class="panel">
-                <h2>扫者选择 <span class="hint">（从团书群选择群主）</span></h2>
-                <div class="search-box">
-                    <input type="text" id="group-scanner-search" placeholder="输入群名搜索..." oninput="searchGroupScanners()" onfocus="searchGroupScanners()">
-                    <div id="group-scanner-dropdown" class="dropdown"></div>
-                </div>
-                <div id="group-scanner-selected" class="selected-list">
-                    <div class="selected-empty">选择群后，该群群主将作为扫者</div>
+                <div class="panel">
+                    <h2>扫者选择 <span class="hint">（从团书群选择群主）</span></h2>
+                    <div class="search-box">
+                        <input type="text" id="group-scanner-search" placeholder="输入群名搜索..." oninput="searchGroupScanners()" onfocus="searchGroupScanners()">
+                        <div id="group-scanner-dropdown" class="dropdown"></div>
+                    </div>
+                    <div id="group-scanner-selected" class="selected-list">
+                        <div class="selected-empty">选择群后，该群群主将作为扫者</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -524,6 +549,7 @@
         let allFriends = [];
         let selectedMainGroup = null;
         let waterGroups = [];
+        let optionalGroups = [];
         let friendScanners = [];
         let groupScanners = [];
         let isLoggedIn = false;
@@ -707,6 +733,82 @@
         function removeWaterGroup(groupId) {
             waterGroups = waterGroups.filter(g => g.group_id !== groupId);
             renderWaterSelected();
+            updateExportButton();
+        }
+
+        // 搜索自选群
+        let optionalSearchTimer = null;
+        function searchOptionalGroups() {
+            clearTimeout(optionalSearchTimer);
+            optionalSearchTimer = setTimeout(() => {
+                const keyword = document.getElementById('optional-search').value.trim().toLowerCase();
+                const dropdown = document.getElementById('optional-dropdown');
+
+                if (!keyword) {
+                    dropdown.classList.remove('active');
+                    return;
+                }
+
+                const optionalIds = new Set(optionalGroups.map(g => g.group_id));
+                const waterIds = new Set(waterGroups.map(g => g.group_id));
+                const filtered = allGroups.filter(g =>
+                    !optionalIds.has(g.group_id) &&
+                    !waterIds.has(g.group_id) &&
+                    g.group_name.toLowerCase().includes(keyword)
+                ).slice(0, 20);
+
+                if (filtered.length === 0) {
+                    dropdown.innerHTML = '<div class="selected-empty">无匹配结果</div>';
+                } else {
+                    dropdown.innerHTML = filtered.map(g => `
+                        <div class="dropdown-item" onclick="addOptionalGroup(${g.group_id})">
+                            <img class="dropdown-avatar" src="${g.avatar_url}" onerror="this.style.display='none'">
+                            <div class="dropdown-info">
+                                <div class="dropdown-name">${escapeHtml(g.group_name)}</div>
+                                <div class="dropdown-sub">${g.member_count}人</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                dropdown.classList.add('active');
+            }, 200);
+        }
+
+        // 添加自选群
+        function addOptionalGroup(groupId) {
+            const group = allGroups.find(g => g.group_id === groupId);
+            if (!group) return;
+            if (optionalGroups.find(g => g.group_id === groupId)) return;
+            optionalGroups.push(group);
+            document.getElementById('optional-search').value = '';
+            document.getElementById('optional-dropdown').classList.remove('active');
+            renderOptionalSelected();
+            updateExportButton();
+        }
+
+        // 渲染已选自选群
+        function renderOptionalSelected() {
+            const container = document.getElementById('optional-selected');
+            if (optionalGroups.length === 0) {
+                container.innerHTML = '<div class="selected-empty">已选择的自选群将显示在这里</div>';
+                return;
+            }
+            container.innerHTML = optionalGroups.map(g => `
+                <div class="selected-item">
+                    <img class="avatar" src="${g.avatar_url}" onerror="this.style.display='none'">
+                    <div class="info">
+                        <div class="name">${escapeHtml(g.group_name)}</div>
+                        <div class="sub">${g.member_count}人</div>
+                    </div>
+                    <button class="remove-btn" onclick="removeOptionalGroup(${g.group_id})">×</button>
+                </div>
+            `).join('');
+        }
+
+        // 移除自选群
+        function removeOptionalGroup(groupId) {
+            optionalGroups = optionalGroups.filter(g => g.group_id !== groupId);
+            renderOptionalSelected();
             updateExportButton();
         }
 
@@ -898,11 +1000,35 @@
             updateExportButton();
         }
 
-        // 获取所有扫者（合并去重）
+        // 获取所有扫者（好友扫者 + 团书群扫者 + 主群群主 + 自选群群主，合并去重）
         function getAllScanners() {
             const seen = new Set();
             const result = [];
-            for (const u of [...friendScanners, ...groupScanners]) {
+            const all = [];
+
+            if (selectedMainGroup && selectedMainGroup.owner_id) {
+                all.push({
+                    user_id: selectedMainGroup.owner_id,
+                    nickname: selectedMainGroup.owner_nickname || String(selectedMainGroup.owner_id),
+                    remark: '',
+                    from_group_id: selectedMainGroup.group_id,
+                    from_group_name: selectedMainGroup.group_name
+                });
+            }
+            for (const g of optionalGroups) {
+                if (g.owner_id) {
+                    all.push({
+                        user_id: g.owner_id,
+                        nickname: g.owner_nickname || String(g.owner_id),
+                        remark: '',
+                        from_group_id: g.group_id,
+                        from_group_name: g.group_name
+                    });
+                }
+            }
+            all.push(...friendScanners, ...groupScanners);
+
+            for (const u of all) {
                 if (!seen.has(u.user_id)) {
                     seen.add(u.user_id);
                     result.push(u);
@@ -940,6 +1066,7 @@
                         main_group_id: selectedMainGroup.group_id,
                         scanner_users: allScanners,
                         water_group_ids: waterGroups.map(g => g.group_id),
+                        optional_group_ids: optionalGroups.map(g => g.group_id),
                         start_date: startDate,
                         end_date: endDate
                     })
