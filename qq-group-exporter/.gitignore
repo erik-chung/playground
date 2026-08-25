@@ -19,6 +19,10 @@ go.sum
 .vscode/
 *.iml
 
+# Python
+__pycache__/
+*.pyc
+
 # 临时文件
 *.tmp
 *.log

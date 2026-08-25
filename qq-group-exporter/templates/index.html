@@ -442,6 +442,9 @@
                             <span class="owner-nick">${escapeHtml(ownerNick)}</span>
                         </div>
                     </div>
+                    <button class="btn btn-export" style="background: #17a2b8; margin-right: 8px;" onclick="goResource(${group.group_id}, '${escapeHtml(group.group_name)}')" data-resource-group-id="${group.group_id}">
+                        生成资源清单
+                    </button>
                     <button class="btn btn-export" onclick="exportGroup(${group.group_id}, '${escapeHtml(group.group_name)}')" data-group-id="${group.group_id}">
                         导出名单
                     </button>
@@ -537,6 +540,10 @@
 
         function goStats() {
             window.location.href = '/stats';
+        }
+
+        function goResource(groupID, groupName) {
+            window.location.href = `/resource?group_id=${groupID}&group_name=${encodeURIComponent(groupName)}`;
         }
 
         function escapeHtml(text) {

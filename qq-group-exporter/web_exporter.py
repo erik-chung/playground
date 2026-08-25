@@ -5,6 +5,10 @@ QQ群成员导出工具 - Web版
 连接到 NapCatQQ 的 HTTP API (OneBot v11)
 """
 import os
+import io
+import csv
+import json
+import zipfile
 import requests
 from datetime import datetime, date
 from pathlib import Path
@@ -182,6 +186,11 @@ def stats_page():
     return send_file("templates/stats.html")
 
 
+@app.route("/resource")
+def resource_page():
+    return send_file("templates/resource.html")
+
+
 @app.route("/api/status")
 def get_status():
     logged_in = check_login()
@@ -227,6 +236,196 @@ def export_group_api(group_id):
         return jsonify({"error": error}), 500
 
     return send_file(filename, as_attachment=True)
+
+
+@app.route("/api/resource/members/<int:group_id>")
+def resource_members(group_id):
+    if not check_login():
+        return jsonify({"error": "未连接到 OneBot API"}), 401
+
+    members, error = get_group_members(group_id)
+    if error:
+        return jsonify({"error": error}), 500
+
+    members_sorted = sorted(members, key=lambda m: m.get("join_time", 0))
+    return jsonify({"members": members_sorted, "total": len(members_sorted)})
+
+
+@app.route("/api/resource/generate", methods=["POST"])
+def resource_generate():
+    if not check_login():
+        return jsonify({"error": "未连接到 OneBot API"}), 401
+
+    if not OPENPYXL_AVAILABLE:
+        return jsonify({"error": "openpyxl 未安装，请运行：pip install openpyxl"}), 500
+
+    link_file = request.files.get("link_file")
+    template_file = request.files.get("template_file")
+    group_id = request.form.get("group_id")
+    group_name = request.form.get("group_name") or "群"
+    unpaid_ids_raw = request.form.get("unpaid_member_ids", "[]")
+
+    if not link_file:
+        return jsonify({"error": "请选择资源链接文件"}), 400
+    if not template_file:
+        return jsonify({"error": "请选择资源清单模版"}), 400
+    if not group_id:
+        return jsonify({"error": "缺少群ID"}), 400
+
+    try:
+        unpaid_ids = set(json.loads(unpaid_ids_raw))
+    except (json.JSONDecodeError, TypeError):
+        unpaid_ids = set()
+
+    group_id = int(group_id)
+
+    # 1. 获取群成员（按入群时间正序）
+    members, error = get_group_members(group_id)
+    if error:
+        return jsonify({"error": f"获取群成员失败: {error}"}), 500
+
+    members_sorted = sorted(members, key=lambda m: m.get("join_time", 0))
+    member_count = len(members_sorted)
+
+    if member_count == 0:
+        return jsonify({"error": "群成员为空"}), 400
+
+    # 2. 生成群成员名单.xlsx
+    member_list_path, error = export_to_excel(group_id, group_name, members_sorted)
+    if error:
+        return jsonify({"error": f"生成群成员名单失败: {error}"}), 500
+
+    # 3. 更新资源链接文件（添加FG列）
+    try:
+        wb_link = openpyxl.load_workbook(link_file)
+        ws_link = wb_link.active
+
+        link_data_rows = ws_link.max_row - 1  # 数据行数（排除表头）
+        if link_data_rows < member_count:
+            return jsonify({
+                "error": f"链接数量不足：链接文件有 {link_data_rows} 条记录，但群成员有 {member_count} 人"
+            }), 400
+
+        yellow_fill = PatternFill(start_color="FFFFFF00", end_color="FFFFFF00", fill_type="solid")
+
+        # 填充FG列（F=QQ号, G=昵称），从第2行开始
+        for i, member in enumerate(members_sorted):
+            row = i + 2
+            qq = str(member.get("user_id", ""))
+            nickname = member.get("nickname", "")
+
+            ws_link.cell(row=row, column=6, value=qq)
+            ws_link.cell(row=row, column=7, value=nickname)
+
+            if member.get("user_id") in unpaid_ids:
+                ws_link.cell(row=row, column=6).fill = yellow_fill
+                ws_link.cell(row=row, column=7).fill = yellow_fill
+
+        # 保存更新后的链接文件
+        safe_name = "".join(c for c in group_name if c not in r'\/:*?"<>|')
+        updated_link_name = Path(link_file.filename).name
+        updated_link_path = EXPORT_DIR / updated_link_name
+        wb_link.save(updated_link_path)
+    except Exception as e:
+        return jsonify({"error": f"处理链接文件失败: {str(e)}"}), 500
+
+    # 4. 生成资源清单.csv
+    try:
+        # 读取模版
+        wb_tpl = openpyxl.load_workbook(template_file)
+
+        # 获取已付款模版数据行
+        paid_sheet_name = None
+        unpaid_sheet_name = None
+        for sn in wb_tpl.sheetnames:
+            if "已付款" in sn or "已付" in sn:
+                paid_sheet_name = sn
+            if "未付款" in sn or "未付" in sn:
+                unpaid_sheet_name = sn
+
+        if not paid_sheet_name:
+            return jsonify({"error": "模版中未找到'已付款'Sheet页"}), 400
+        if not unpaid_sheet_name:
+            return jsonify({"error": "模版中未找到'未付款'Sheet页"}), 400
+
+        ws_paid = wb_tpl[paid_sheet_name]
+        ws_unpaid = wb_tpl[unpaid_sheet_name]
+
+        # 读取表头（第1行）
+        header_cols = max(ws_paid.max_column, ws_unpaid.max_column)
+        header_row = []
+        for c in range(1, header_cols + 1):
+            val = ws_paid.cell(1, c).value
+            header_row.append(str(val) if val is not None else "")
+
+        # 读取已付款模版数据行（第2行）
+        paid_template = []
+        for c in range(1, ws_paid.max_column + 1):
+            val = ws_paid.cell(2, c).value
+            paid_template.append(str(val) if val is not None else "")
+
+        # 读取未付款模版数据行（第2行）
+        unpaid_template = []
+        for c in range(1, ws_unpaid.max_column + 1):
+            val = ws_unpaid.cell(2, c).value
+            unpaid_template.append(str(val) if val is not None else "")
+
+        # 生成CSV数据
+        csv_output = io.StringIO()
+        writer = csv.writer(csv_output)
+        writer.writerow(header_row)
+
+        # 按链接文件顺序，取前 member_count 行（FG列有内容的行）
+        seq = 1
+        for i in range(member_count):
+            row = i + 2
+            qq = str(ws_link.cell(row, column=6).value or "")
+            link = str(ws_link.cell(row, column=2).value or "")
+            is_unpaid = (members_sorted[i].get("user_id") in unpaid_ids)
+
+            if is_unpaid:
+                tpl = unpaid_template
+            else:
+                tpl = paid_template
+
+            out_row = []
+            for c_idx, tpl_val in enumerate(tpl):
+                val = tpl_val
+                if c_idx == 0:
+                    val = str(seq)
+                else:
+                    val = val.replace("{.QQ号}", qq)
+                    val = val.replace("{.资源链接}", link)
+                out_row.append(val)
+
+            # 补齐列数
+            while len(out_row) < header_cols:
+                out_row.append("")
+
+            writer.writerow(out_row)
+            seq += 1
+
+        # 保存CSV（GBK编码）
+        csv_name = "资源清单.csv"
+        csv_path = EXPORT_DIR / csv_name
+        with open(csv_path, 'w', encoding='gbk', newline='') as f:
+            f.write(csv_output.getvalue())
+
+    except Exception as e:
+        return jsonify({"error": f"生成资源清单CSV失败: {str(e)}"}), 500
+
+    # 5. 打包为zip返回
+    zip_name = f"资源清单-{safe_name}.zip"
+    zip_path = EXPORT_DIR / zip_name
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.write(member_list_path, arcname=member_list_path.name)
+        zf.write(updated_link_path, arcname=updated_link_name)
+        zf.write(csv_path, arcname=csv_name)
+
+    from urllib.parse import quote
+    resp = send_file(zip_path, as_attachment=True)
+    resp.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(zip_name)}"
+    return resp
 
 
 def get_friends():
