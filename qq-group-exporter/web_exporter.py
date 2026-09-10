@@ -778,11 +778,11 @@ def main():
     print("使用步骤：")
     print("1. 启动 NapCatQQ 并确保 QQ 已登录")
     print(f"2. 确保 HTTP API 服务运行在 {ONEBOT_URL}")
-    print("3. 打开浏览器访问：http://127.0.0.1:8080")
+    print("3. 打开浏览器访问：http://127.0.0.1:5000")
     print()
     print("=" * 66)
 
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
 
 
 if __name__ == "__main__":

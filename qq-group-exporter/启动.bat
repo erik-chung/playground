@@ -23,7 +23,7 @@ echo.
 echo ================================================================
 echo Starting...
 echo Make sure NapCatQQ is running and QQ is logged in.
-echo Open browser: http://127.0.0.1:8080
+echo Open browser: http://127.0.0.1:5000
 echo ================================================================
 echo.
 
