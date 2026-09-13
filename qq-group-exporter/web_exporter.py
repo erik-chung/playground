@@ -38,7 +38,11 @@ def export_to_excel(group_id, group_name, members):
     if not OPENPYXL_AVAILABLE:
         return None, "openpyxl 未安装，请运行：pip install openpyxl"
 
-    members_sorted = sorted(members, key=lambda m: m.get("join_time", 0))
+    role_rank = {"owner": 0, "admin": 1, "member": 2}
+    members_sorted = sorted(
+        members,
+        key=lambda m: (role_rank.get(m.get("role", "member"), 2), m.get("join_time", 0))
+    )
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -247,7 +251,11 @@ def resource_members(group_id):
     if error:
         return jsonify({"error": error}), 500
 
-    members_sorted = sorted(members, key=lambda m: m.get("join_time", 0))
+    role_rank = {"owner": 0, "admin": 1, "member": 2}
+    members_sorted = sorted(
+        members,
+        key=lambda m: (role_rank.get(m.get("role", "member"), 2), m.get("join_time", 0))
+    )
     return jsonify({"members": members_sorted, "total": len(members_sorted)})
 
 
@@ -279,12 +287,16 @@ def resource_generate():
 
     group_id = int(group_id)
 
-    # 1. 获取群成员（按入群时间正序）
+    # 1. 获取群成员（按角色倒序 + 入群时间正序）
     members, error = get_group_members(group_id)
     if error:
         return jsonify({"error": f"获取群成员失败: {error}"}), 500
 
-    members_sorted = sorted(members, key=lambda m: m.get("join_time", 0))
+    role_rank = {"owner": 0, "admin": 1, "member": 2}
+    members_sorted = sorted(
+        members,
+        key=lambda m: (role_rank.get(m.get("role", "member"), 2), m.get("join_time", 0))
+    )
     member_count = len(members_sorted)
 
     if member_count == 0:
